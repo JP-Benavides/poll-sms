@@ -1,0 +1,10 @@
+{
+  "name": "poll-sms",
+  "private": true,
+  "type": "module",
+  "workspaces": ["api", "dashboard"],
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^7"
+  }
+}
