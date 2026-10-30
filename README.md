@@ -1,6 +1,6 @@
 # poll-sms
 
-Local Bun + Playwright process for signing into Poll Everywhere with NYU/Duo and reading multiple-choice questions and answers. No frontend or API server is required.
+Track and Answer your PollEv's 
 
 ## Setup
 
