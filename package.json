@@ -2,9 +2,16 @@
   "name": "poll-sms",
   "private": true,
   "type": "module",
-  "workspaces": ["api", "dashboard"],
   "devDependencies": {
     "@types/bun": "latest",
     "typescript": "^7"
+  },
+  "scripts": {
+    "start": "bun run src/main.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "dotenv": "^18.0.9",
+    "playwright": "^1.64.1"
   }
 }

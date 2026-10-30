@@ -1,15 +1,36 @@
 # poll-sms
 
-To install dependencies:
+Local Bun + Playwright process for signing into Poll Everywhere with NYU/Duo and reading multiple-choice questions and answers. No frontend or API server is required.
 
-```bash
+## Setup
+
+```sh
 bun install
+bunx playwright install chromium
 ```
 
-To run:
+Keep your credentials in the root `.env` (excluded from Git):
 
-```bash
-bun run index.ts
+```dotenv
+USERNAME=your-netid@nyu.edu
+PASSWORD=your-password
+POLL_EV_LINK=https://pollev.com/your-presenter
 ```
 
-This project was created using `bun init` in bun v1.4.2. [Bun](https://bun.com) is a fast all-in-one JavaScript runtime.
+## Run
+
+```sh
+bun start
+```
+
+Approve Duo on your phone when prompted. The visible browser remains open until you close it. The parser reads and logs the current question and choices once after login.
+
+On macOS, prevent idle sleep while running with `caffeinate -i bun start`. Closing the laptop lid can still put it to sleep.
+
+```sh
+bun run typecheck
+```
+
+## Current limitations
+
+Sessions are not saved between runs. The detector logs state changes in the browser console but does not yet trigger repeated parsing. The Discord webhook integration is unfinished: its URL is currently assigned from `POLL_EV_LINK`, and its payload needs Discord message formatting. Configure and finish that integration before relying on notifications.

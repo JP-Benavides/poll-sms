@@ -3,7 +3,7 @@ import { scrapePage } from './parser';
 import { chromium } from 'playwright';
 import dotenv from "dotenv"; 
 import { navigateLogin } from './login.ts'; 
-import { observer, targetNode, detectionConfig } from './detect.ts'
+import { startDetection } from './detect.ts'
 import { send_message } from './discord_webhook.ts'
 
 dotenv.config({
@@ -35,7 +35,7 @@ async function main() {
     await navigateLogin(context, page, userConfig);
 
     //detect() -> once change in dom is detected parse Q&A
-    observer.observe(targetNode, detectionConfig); 
+    await startDetection(page); 
 
     try {
       const poll = await scrapePage(page);
