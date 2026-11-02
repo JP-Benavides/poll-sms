@@ -13,6 +13,8 @@ Keep your credentials in the root `.env` (excluded from Git):
 
 ```dotenv
 USERNAME=your-netid@nyu.edu
+FIRST_NAME=your-first-name
+LAST_NAME=your-last-name
 PASSWORD=your-password
 POLL_EV_LINK=https://pollev.com/your-presenter
 DISCORD_URL=https://discord.com/api/webhooks/your-webhook-id/your-webhook-token
@@ -31,9 +33,17 @@ bun start
 
 Approve Duo on your phone when prompted. The visible browser remains open until you close it. After login, the watcher observes `#active_tab_content` with a 300 ms debounce. A visible `.component-response-header__title` means open; no visible question heading means closed. When open, it calls the existing multiple-choice parser. Startup and page loads also trigger checks. Delivery is attempted once per distinct poll instance, question, and ordered answer set per run; reopening an unchanged poll does not send it again.
 
-**Temporary testing override:** `main.ts` currently calls `createPollAnswerState(true)`, so capture stays enabled and logs every eligible nonempty reply, even without a poll (labeled `test`). Set the argument to `false` to restore the normal behavior described below.
+Answer handling starts disabled. Each newly parsed poll starts a local Codex CLI call using your existing Codex login. Install Codex and sign in before running; if the solver is unavailable, fails, or exceeds its 60-second deadline, the app requests a manual answer instead.
 
-Normally, answer capture starts disabled. Each newly parsed, distinct poll enables capture. The next nonempty message from `USER_ID` in `CHANNEL_ID` is saved in memory and logged with that poll’s instance ID, question, and choices, then capture becomes disabled again. A newer poll replaces the pending poll; closing the poll, navigating, or closing the browser disables capture. Repeated detection of the same poll does not re-enable capture. Replies are captured as text without validating or submitting a choice. The Gateway remains connected while disabled, but unrelated messages are not logged. Bot/webhook messages and messages from other users or channels are ignored. It does not submit answers or reply in Discord. The existing webhook still sends outgoing questions.
+The webhook posts the question, numbered choices, and the suggested answer with a brief explanation. Use Discord **Reply** on that proposal:
+
+- Reply `yes` to approve the suggestion and submit it through the existing Playwright browser.
+- Reply `no` to reject the suggestion, then reply to the same proposal with your choice number to submit your own answer.
+- If no suggestion is available, reply with a choice number directly.
+
+Only replies from `USER_ID` in `CHANNEL_ID` referencing the current proposal are accepted. The webhook must post to that same channel. Other messages are ignored. A changed or closed poll cancels pending solver work and invalidates approval. Duplicate approvals cannot submit twice. There is no always-enabled testing override.
+
+Before submission, Playwright checks that the poll and ordered choices still match. It supports a unique button per choice or radio choices with a separate Submit control. It waits up to three seconds for a new, explicit submission acknowledgement within the unchanged poll. Missing confirmation, navigation, or cancellation after interaction is reported as uncertain; check the browser before taking further action. Submissions are never retried automatically.
 
 Discord delivery errors are logged and are not retried automatically. A poll parsing failure is retried by a later check. Messages longer than 2000 characters are rejected locally.
 
@@ -46,4 +56,4 @@ bun test ./test
 
 ## Current limitations
 
-Sessions are not saved between runs. Detection uses the two-state waiting/question layout inspected on Poll Everywhere. It does not use disabled buttons or status text. There is no periodic polling; parsing failures retry only after another DOM change. The watcher expects `#active_tab_content` to remain in place while its contents change. The local Playwright fixture tests use mocked callbacks; they do not establish live site compatibility. Restarting the process resets deduplication and may send the current poll again. A failed delivery is not retried for that same poll content during the run.
+Sessions are not saved between runs. Detection uses the two-state waiting/question layout inspected on Poll Everywhere. It does not use disabled buttons or status text. There is no periodic polling; parsing failures retry only after another DOM change. The watcher expects `#active_tab_content` to remain in place while its contents change. Tests use local browser fixtures and mocked agent/Discord calls; they do not establish live site compatibility. Live Poll Everywhere controls and confirmation messages still require verification. Only text-based single-choice polls are supported. Restarting the process resets deduplication and may send the current poll again. A failed delivery is not retried for that same poll content during the run.
