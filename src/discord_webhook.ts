@@ -1,3 +1,5 @@
+//Previously used to send messages, migrated to gateway to support both
+
 import type { UserInfo, ParsedPoll, PollIdentity, PollSuggestion } from './types.ts';
 
 function validateContent(content: string): void {

@@ -17,13 +17,12 @@ FIRST_NAME=your-first-name
 LAST_NAME=your-last-name
 PASSWORD=your-password
 POLL_EV_LINK=https://pollev.com/your-presenter
-DISCORD_URL=https://discord.com/api/webhooks/your-webhook-id/your-webhook-token
 BOT_TOKEN=your-bot-token
 CHANNEL_ID=your-server-channel-id
 USER_ID=your-discord-user-id
 ```
 
-For incoming messages, install your bot in the server and give it access to view the configured channel. Enable **Message Content Intent** under **Bot → Privileged Gateway Intents** in the Discord Developer Portal. `CHANNEL_ID` is a server channel, not a DM. Use Discord Developer Mode to copy channel and user IDs.
+For incoming messages, install your bot in the server and give it View Channel and Send Messages permissions in the configured channel (Send Messages in Threads as well if using a thread). Enable **Message Content Intent** under **Bot → Privileged Gateway Intents** in the Discord Developer Portal. `CHANNEL_ID` is a server channel, not a DM. Use Discord Developer Mode to copy channel and user IDs.
 
 ## Run
 
@@ -35,13 +34,13 @@ Approve Duo on your phone when prompted. The visible browser remains open until 
 
 Answer handling starts disabled. Each newly parsed poll starts a local Codex CLI call using your existing Codex login. Install Codex and sign in before running; if the solver is unavailable, fails, or exceeds its 60-second deadline, the app requests a manual answer instead.
 
-The webhook posts the question, numbered choices, and the suggested answer with a brief explanation. Use Discord **Reply** on that proposal:
+The bot posts the question, numbered choices, and the suggested answer with a brief explanation. Use Discord **Reply** on that proposal:
 
 - Reply `yes` to approve the suggestion and submit it through the existing Playwright browser.
 - Reply `no` to reject the suggestion, then reply to the same proposal with your choice number to submit your own answer.
 - If no suggestion is available, reply with a choice number directly.
 
-Only replies from `USER_ID` in `CHANNEL_ID` referencing the current proposal are accepted. The webhook must post to that same channel. Other messages are ignored. A changed or closed poll cancels pending solver work and invalidates approval. Duplicate approvals cannot submit twice. There is no always-enabled testing override.
+Only replies from `USER_ID` in `CHANNEL_ID` referencing the current proposal are accepted. The same bot sends proposals and status updates to that channel. `DISCORD_URL` is no longer used; `src/discord_webhook.ts` is retained only as historical code. Other messages are ignored. A changed or closed poll cancels pending solver work and invalidates approval. Duplicate approvals cannot submit twice. There is no always-enabled testing override.
 
 Before submission, Playwright checks that the poll and ordered choices still match. It supports a unique button per choice or radio choices with a separate Submit control. It waits up to three seconds for a new, explicit submission acknowledgement within the unchanged poll. Missing confirmation, navigation, or cancellation after interaction is reported as uncertain; check the browser before taking further action. Submissions are never retried automatically.
 

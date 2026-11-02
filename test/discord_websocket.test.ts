@@ -84,3 +84,24 @@ for (const field of ['USER_ID', 'CHANNEL_ID', 'BOT_TOKEN']) {
     expect(login).not.toHaveBeenCalled();
   });
 }
+
+test('bot sends proposals and status to configured channel with mentions disabled', async () => {
+  const connection = await connect(() => {});
+  const sent: unknown[] = [];
+  const fetchChannel = spyOn(client.channels, 'fetch').mockResolvedValue({
+    isSendable: () => true,
+    send: async (payload: unknown) => { sent.push(payload); return { id: 'bot-proposal' }; },
+  } as never);
+  try {
+    const id = await connection.sendProposal({ instanceId: 'poll', poll: { question: 'Q?', answers: ['A', 'B'] } }, { choice: 2, explanation: 'B fits.' });
+    expect(id).toBe('bot-proposal');
+    expect(fetchChannel).toHaveBeenCalledWith('channel');
+    expect(sent[0]).toEqual({ content: 'Q?\n1. A\n2. B\n\nSuggested choice: 2\nExplanation: B fits.\nReply to this message with yes to approve or no to enter your own choice.', allowedMentions: { parse: [] } });
+    await connection.sendStatus('Confirmed.');
+    expect(sent[1]).toEqual({ content: 'Confirmed.', allowedMentions: { parse: [] } });
+    await expect(connection.sendStatus('x'.repeat(2001))).rejects.toThrow('2000');
+    expect(sent).toHaveLength(2);
+    fetchChannel.mockRejectedValue(new Error('private details'));
+    await expect(connection.sendStatus('Hello')).rejects.toThrow('Send Messages permission');
+  } finally { fetchChannel.mockRestore(); await connection(); }
+});

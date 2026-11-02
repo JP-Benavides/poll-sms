@@ -98,3 +98,8 @@ Local, ignored runtime configuration containing credentials and poll link. Never
 ## Maintenance guidance
 
 When adding, moving, or removing files, update this map and the README as needed. Keep secrets in ignored local environment files and refer to variable names only. When changing Poll Everywhere selectors or status heuristics, verify behavior against the live page before relying on it. Keep deduplication and delivery-error behavior documented. Keep the project description accurate: call it a local Bun watcher until an API, dashboard, or SMS integration actually exists.
+
+
+## Current Discord transport
+
+The runtime uses `startDiscord` in `src/discord_websocket.ts` for both incoming Gateway messages and outgoing bot messages through discord.js. Its callable connection stops the client and exposes `sendProposal` and `sendStatus`. Main does not import the historical `src/discord_webhook.ts` or read DISCORD_URL. The bot requires View Channel and Send Messages permissions. Proposals return their sent message ID for approval matching. The current approval flow is described in README.md; earlier capture-only/testing-override descriptions above are obsolete.

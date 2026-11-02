@@ -4,10 +4,9 @@ import { chromium, type Page } from 'playwright';
 import dotenv from 'dotenv';
 import { navigateLogin } from './login.ts';
 import { startDetection } from './detect.ts';
-import { sendProposal, sendStatus } from './discord_webhook.ts';
 import { solvePoll } from './poll_solver.ts';
 import { answerPoll } from './answerPoll.ts';
-import { startDiscord } from './discord_websocket.ts';
+import { startDiscord, type DiscordConnection } from './discord_websocket.ts';
 import { createPollAnswerState } from './poll_answer.ts';
 
 dotenv.config({
@@ -22,7 +21,7 @@ const userConfig: UserInfo = {
   password: process.env.PASSWORD ?? '',
   pollEvLink: process.env.POLL_EV_LINK ?? '',
   presenterName: process.env.POLL_EV_LINK ? new URL(process.env.POLL_EV_LINK).pathname.split('/').filter(Boolean)[0] ?? '' : '',
-  discordURL: process.env.DISCORD_URL ?? '',
+  discordURL: '', // Retained only for the historical webhook interface.
 };
 
 export type PollParser = (page: Page) => Promise<ParsedPoll>;
@@ -104,13 +103,19 @@ export async function main() {
 
   let stopDetection: (() => Promise<void>) | undefined;
   let handler: PollHandler | undefined;
-  let stopDiscord: (() => Promise<void>) | undefined;
+  let stopDiscord: DiscordConnection | undefined;
 
   let page: Page | undefined;
   const answerState = createPollAnswerState({
     solve: solvePoll,
-    propose: (identity, suggestion) => sendProposal(userConfig, identity, suggestion, process.env.CHANNEL_ID ?? ''),
-    notify: message => sendStatus(userConfig, message),
+    propose: (identity, suggestion) => {
+      if (!stopDiscord) throw new Error('Discord is not connected.');
+      return stopDiscord.sendProposal(identity, suggestion);
+    },
+    notify: message => {
+      if (!stopDiscord) throw new Error('Discord is not connected.');
+      return stopDiscord.sendStatus(message);
+    },
     submit: (identity, choice, signal) => page
       ? answerPoll(page, identity, choice, signal)
       : Promise.resolve({ status: 'failed', detail: 'Poll browser is unavailable.' }),
