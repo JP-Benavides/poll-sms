@@ -31,7 +31,9 @@ bun start
 
 Approve Duo on your phone when prompted. The visible browser remains open until you close it. After login, the watcher observes `#active_tab_content` with a 300 ms debounce. A visible `.component-response-header__title` means open; no visible question heading means closed. When open, it calls the existing multiple-choice parser. Startup and page loads also trigger checks. Delivery is attempted once per distinct poll instance, question, and ordered answer set per run; reopening an unchanged poll does not send it again.
 
-The bot logs new messages from `USER_ID` in `CHANNEL_ID` to the terminal. Bot/webhook messages and messages from other users or channels are ignored. It does not submit answers or reply in Discord. The existing webhook still sends outgoing questions.
+**Temporary testing override:** `main.ts` currently calls `createPollAnswerState(true)`, so capture stays enabled and logs every eligible nonempty reply, even without a poll (labeled `test`). Set the argument to `false` to restore the normal behavior described below.
+
+Normally, answer capture starts disabled. Each newly parsed, distinct poll enables capture. The next nonempty message from `USER_ID` in `CHANNEL_ID` is saved in memory and logged with that poll’s instance ID, question, and choices, then capture becomes disabled again. A newer poll replaces the pending poll; closing the poll, navigating, or closing the browser disables capture. Repeated detection of the same poll does not re-enable capture. Replies are captured as text without validating or submitting a choice. The Gateway remains connected while disabled, but unrelated messages are not logged. Bot/webhook messages and messages from other users or channels are ignored. It does not submit answers or reply in Discord. The existing webhook still sends outgoing questions.
 
 Discord delivery errors are logged and are not retried automatically. A poll parsing failure is retried by a later check. Messages longer than 2000 characters are rejected locally.
 

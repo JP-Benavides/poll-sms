@@ -123,3 +123,13 @@ test('handler stop prevents delivery from an in-flight parse', async () => {
   await running;
   expect(deliveries).toBe(0);
 });
+
+test('closing a question disables pending answer capture', async () => {
+  const page = await setup(question());
+  let open = false;
+  const stop = await startDetection(page, () => { open = true; }, () => { open = false; });
+  await until(() => open);
+  await page.locator('#active_tab_content').evaluate((el, html) => { el.innerHTML = html; }, waiting);
+  await until(() => !open);
+  await stop();
+});

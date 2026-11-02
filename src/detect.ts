@@ -3,6 +3,7 @@ import type { Page } from 'playwright';
 export async function startDetection(
   page: Page,
   onQuestion: () => void | Promise<void>,
+  onClosed: () => void = () => {},
 ): Promise<() => Promise<void>> {
   let stopped = false;
   await page.exposeFunction('__pollSmsChanged', async () => {
@@ -14,12 +15,15 @@ export async function startDetection(
     }
   });
 
+  await page.exposeFunction('__pollSmsClosed', () => { if (!stopped) onClosed(); });
+
   const install = async () => {
     await page.locator('#active_tab_content').waitFor({ state: 'attached' });
     if (stopped) return;
     await page.evaluate(() => {
       const scope = window as typeof window & {
         __pollSmsChanged: () => Promise<void>;
+        __pollSmsClosed: () => Promise<void>;
         __stopPollSmsDetection?: () => void;
       };
       scope.__stopPollSmsDetection?.();
@@ -31,6 +35,8 @@ export async function startDetection(
           const heading = container.querySelector<HTMLElement>('.component-response-header__title');
           if (heading && heading.getClientRects().length && getComputedStyle(heading).visibility !== 'hidden') {
             void scope.__pollSmsChanged().catch(() => undefined);
+          } else {
+            void scope.__pollSmsClosed().catch(() => undefined);
           }
         }, 300);
       };

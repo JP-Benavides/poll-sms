@@ -6,6 +6,7 @@ import { navigateLogin } from './login.ts';
 import { startDetection } from './detect.ts';
 import { send_message } from './discord_webhook.ts';
 import { startDiscord } from './discord_websocket.ts';
+import { createPollAnswerState } from './poll_answer.ts';
 
 dotenv.config({
   path: new URL('../.env', import.meta.url).pathname,
@@ -98,29 +99,42 @@ export async function main() {
   let handler: PollHandler | undefined;
   let stopDiscord: (() => Promise<void>) | undefined;
 
+  // Temporary testing override: set false to restore one answer per parsed poll.
+  const answerState = createPollAnswerState(true);
+  console.log('Answer state:', answerState.state, '(testing override)');
+
   try {
     stopDiscord = await startDiscord({
       BOT_TOKEN: process.env.BOT_TOKEN ?? '',
       CHANNEL_ID: process.env.CHANNEL_ID ?? '',
       USER_ID: process.env.USER_ID ?? '',
+    }, content => {
+      const received = answerState.receive(content);
+      if (!received) return;
+      console.log('Poll answer captured:', received);
+      console.log('Answer state:', answerState.state);
     });
     const context = await browser.newContext();
     const page = await context.newPage();
     await navigateLogin(context, page, userConfig);
 
-    handler = createPollHandler(page, async (poll) => {
+    handler = createPollHandler(page, async (poll, instanceId) => {
+      answerState.enable(poll, instanceId);
+      console.log('Answer state: enabled');
       console.log('Poll question:', poll.question);
       console.log('Poll answers:', poll.answers);
       console.log('Sending message to Discord');
       await send_message(userConfig, poll);
       console.log('Message was sent to Discord');
     });
-    page.once('close', handler.stop);
-    stopDetection = await startDetection(page, handler);
+    page.once('close', () => { answerState.disable(); handler?.stop(); });
+    page.on('domcontentloaded', () => answerState.disable());
+    stopDetection = await startDetection(page, handler, () => answerState.disable());
 
     
     await closed;
   } finally {
+    answerState.disable();
     handler?.stop();
     await stopDetection?.();
     await stopDiscord?.();

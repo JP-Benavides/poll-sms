@@ -40,13 +40,16 @@ Application entry point. Loads `../.env`, builds `UserInfo` from environment var
 `scrapePage` waits for one visible legacy multiple-choice question and its answers, normalizes whitespace, and returns a `ParsedPoll`. It does not monitor changes. The watchdog reuses this parser unchanged; its eligibility checks mirror these selectors and need live validation when the external DOM changes.
 #### `src/detect.ts`
 
-`startDetection(page, onQuestion)` installs a MutationObserver on `#active_tab_content`, debounces changes for 300 ms, and calls `onQuestion` if the question heading is visible. It checks at startup, reinstalls after page loads, and returns a cleanup function. One watcher is started per Page. No answer extraction, status-text matching, disabled-button checks, periodic polling, or stability snapshots.
+`startDetection(page, onQuestion)` installs a MutationObserver on `#active_tab_content`, debounces changes for 300 ms, and calls `onQuestion` if the question heading is visible, otherwise `onClosed` to disable answer capture. It checks at startup, reinstalls after page loads, and returns a cleanup function. One watcher is started per Page. No answer extraction, status-text matching, disabled-button checks, periodic polling, or stability snapshots.
 #### `src/discord_webhook.ts`
 
 `send_message` formats the question and numbered answers into Discord `content`, disables mentions, enforces the 2000-character limit, and awaits the request. Non-success responses throw with HTTP status and response body. The webhook does not validate the URL in advance or set `wait=true`.
 #### `src/discord_websocket.ts`
 
-`startDiscord(config, onMessage)` logs in a discord.js client, listens for new server messages from the configured `USER_ID` in `CHANNEL_ID`, and passes their text to the callback. Bot and webhook messages are ignored. Requires the Message Content Intent in the Developer Portal and channel visibility. Returns an async disconnect function; login failures dispose the client. `main.ts` starts it and logs incoming text, then disconnects during shutdown. No answer selection or Discord replies are implemented.
+`startDiscord(config, onMessage)` logs in a discord.js client, listens for new server messages from the configured `USER_ID` in `CHANNEL_ID`, and passes their text to the callback. Bot and webhook messages are ignored. Requires the Message Content Intent in the Developer Portal and channel visibility. Returns an async disconnect function; login failures dispose the client. `main.ts` routes eligible messages to the poll answer state, logs accepted answers, and disconnects during shutdown. No answer submission or Discord replies are implemented.
+#### `src/poll_answer.ts`
+
+In-memory disabled/enabled answer state. Temporary testing override: main calls `createPollAnswerState(true)` to keep capture enabled across replies and closures, using an explicitly labeled test poll when none is pending. Set false to restore normal behavior. A newly parsed poll enables capture and replaces any pending poll. The first nonempty eligible reply atomically consumes it and retains the answer with a snapshot of the poll and instance ID. Main disables capture on poll closure, navigation, page closure, and shutdown. Captured text is logged, not submitted or validated as a choice. Duplicate poll detections do not re-arm capture.
 #### `src/types.ts`
 
 Shared `UserInfo` and `ParsedPoll` interfaces. `ParsedPoll` has a question string and answer string array. `pollEvLink` and `discordURL` are typed as strings.
