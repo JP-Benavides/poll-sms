@@ -18,3 +18,24 @@ export interface BotInfo{
   CHANNEL_ID: string; 
   USER_ID: string; 
 }
+
+export interface PollIdentity {
+  instanceId: string;
+  poll: ParsedPoll;
+}
+
+export interface PollSuggestion {
+  choice: number;
+  explanation: string;
+}
+
+export interface DiscordReply {
+  id: string;
+  content: string;
+  replyToId: string | null;
+}
+
+export interface SubmissionResult {
+  status: 'confirmed' | 'failed' | 'uncertain';
+  detail: string;
+}

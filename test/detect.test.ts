@@ -133,3 +133,38 @@ test('closing a question disables pending answer capture', async () => {
   await until(() => !open);
   await stop();
 });
+
+test('changed question invalidates pending work before parsing replacement', async () => {
+  const page = await setup(question());
+  const events: string[] = [];
+  const stop = await startDetection(page, () => { events.push('question'); }, () => { events.push('invalidate'); });
+  await until(() => events.length === 1);
+  await page.locator('.component-response-header__title').evaluate(el => { el.textContent = 'New question'; });
+  await until(() => events.length === 3);
+  expect(events).toEqual(['question', 'invalidate', 'question']);
+  await page.locator('#active_tab_content').evaluate(el => { el.classList.add('unrelated'); });
+  await until(() => events.length === 4);
+  expect(events.at(-1)).toBe('question');
+  await stop();
+});
+
+test('invalidation prevents a parse from enabling a closed poll', async () => {
+  const page = await setup(question());
+  let release!: () => void;
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  let parsing = false;
+  let deliveries = 0;
+  const handler = createPollHandler(page, () => { deliveries++; }, async current => {
+    const parsed = await scrapePage(current);
+    parsing = true;
+    await gate;
+    return parsed;
+  });
+  const running = handler();
+  await until(() => parsing);
+  handler.invalidate();
+  release();
+  await running;
+  expect(deliveries).toBe(0);
+  handler.stop();
+});

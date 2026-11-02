@@ -6,9 +6,10 @@ export async function startDetection(
   onClosed: () => void = () => {},
 ): Promise<() => Promise<void>> {
   let stopped = false;
-  await page.exposeFunction('__pollSmsChanged', async () => {
+  await page.exposeFunction('__pollSmsChanged', async (identityChanged: boolean) => {
     if (stopped) return;
     try {
+      if (identityChanged) onClosed();
       await onQuestion();
     } catch (error) {
       if (!stopped && !page.isClosed()) console.error('Could not process poll:', error);
@@ -22,20 +23,31 @@ export async function startDetection(
     if (stopped) return;
     await page.evaluate(() => {
       const scope = window as typeof window & {
-        __pollSmsChanged: () => Promise<void>;
+        __pollSmsChanged: (identityChanged: boolean) => Promise<void>;
         __pollSmsClosed: () => Promise<void>;
         __stopPollSmsDetection?: () => void;
       };
       scope.__stopPollSmsDetection?.();
       const container = document.querySelector('#active_tab_content')!;
       let timer: number;
+      let previousIdentity: string | undefined;
       const schedule = () => {
         clearTimeout(timer);
         timer = window.setTimeout(() => {
           const heading = container.querySelector<HTMLElement>('.component-response-header__title');
           if (heading && heading.getClientRects().length && getComputedStyle(heading).visibility !== 'hidden') {
-            void scope.__pollSmsChanged().catch(() => undefined);
+            const poll = heading.closest('[id^="legacy_multiple_choice_poll_instance_"]');
+            const normalize = (text: string) => text.replace(/\s+/g, ' ').trim();
+            const choices = Array.from(poll?.querySelectorAll<HTMLElement>(
+              '.component-response-multiple-choice__response-container > div > div',
+            ) ?? []).filter(el => el.getClientRects().length && getComputedStyle(el).visibility !== 'hidden')
+              .map(el => normalize(el.innerText));
+            const identity = JSON.stringify([poll?.id, normalize(heading.innerText), choices]);
+            const changed = previousIdentity !== undefined && previousIdentity !== identity;
+            previousIdentity = identity;
+            void scope.__pollSmsChanged(changed).catch(() => undefined);
           } else {
+            previousIdentity = undefined;
             void scope.__pollSmsClosed().catch(() => undefined);
           }
         }, 300);

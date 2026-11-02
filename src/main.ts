@@ -4,7 +4,9 @@ import { chromium, type Page } from 'playwright';
 import dotenv from 'dotenv';
 import { navigateLogin } from './login.ts';
 import { startDetection } from './detect.ts';
-import { send_message } from './discord_webhook.ts';
+import { sendProposal, sendStatus } from './discord_webhook.ts';
+import { solvePoll } from './poll_solver.ts';
+import { answerPoll } from './answerPoll.ts';
 import { startDiscord } from './discord_websocket.ts';
 import { createPollAnswerState } from './poll_answer.ts';
 
@@ -29,6 +31,7 @@ export type PollDelivery = (poll: ParsedPoll, instanceId: string) => void | Prom
 export interface PollHandler {
   (): Promise<void>;
   stop(): void;
+  invalidate(): void;
 }
 
 export function createPollHandler(
@@ -42,6 +45,7 @@ export function createPollHandler(
   let pending = false;
   let running = false;
   let stopped = false;
+  let generation = 0;
 
   const handler = async () => {
     if (stopped) return;
@@ -55,6 +59,7 @@ export function createPollHandler(
         const instanceId = await poll.getAttribute('id');
         if (stopped || !instanceId) continue;
 
+        const parsingGeneration = generation;
         let parsed: ParsedPoll;
         try {
           parsed = await parsePoll(page);
@@ -63,6 +68,7 @@ export function createPollHandler(
           continue;
         }
         if (stopped) return;
+        if (parsingGeneration !== generation) continue;
 
         if (!(await heading.isVisible()) || await poll.getAttribute('id') !== instanceId || stopped) continue;
         const key = JSON.stringify([instanceId, parsed.question, parsed.answers]);
@@ -80,7 +86,8 @@ export function createPollHandler(
       running = false;
     }
   };
-  handler.stop = () => { stopped = true; pending = false; };
+  handler.invalidate = () => { generation++; pending = false; };
+  handler.stop = () => { stopped = true; handler.invalidate(); };
   return handler;
 }
 
@@ -99,37 +106,39 @@ export async function main() {
   let handler: PollHandler | undefined;
   let stopDiscord: (() => Promise<void>) | undefined;
 
-  // Temporary testing override: set false to restore one answer per parsed poll.
-  const answerState = createPollAnswerState(true);
-  console.log('Answer state:', answerState.state, '(testing override)');
+  let page: Page | undefined;
+  const answerState = createPollAnswerState({
+    solve: solvePoll,
+    propose: (identity, suggestion) => sendProposal(userConfig, identity, suggestion, process.env.CHANNEL_ID ?? ''),
+    notify: message => sendStatus(userConfig, message),
+    submit: (identity, choice, signal) => page
+      ? answerPoll(page, identity, choice, signal)
+      : Promise.resolve({ status: 'failed', detail: 'Poll browser is unavailable.' }),
+    onError: message => console.error(message),
+  });
+  const invalidate = () => { handler?.invalidate(); answerState.disable(); };
 
   try {
     stopDiscord = await startDiscord({
       BOT_TOKEN: process.env.BOT_TOKEN ?? '',
       CHANNEL_ID: process.env.CHANNEL_ID ?? '',
       USER_ID: process.env.USER_ID ?? '',
-    }, content => {
-      const received = answerState.receive(content);
-      if (!received) return;
-      console.log('Poll answer captured:', received);
-      console.log('Answer state:', answerState.state);
-    });
+    }, reply => answerState.receive(reply));
     const context = await browser.newContext();
-    const page = await context.newPage();
+    page = await context.newPage();
     await navigateLogin(context, page, userConfig);
 
-    handler = createPollHandler(page, async (poll, instanceId) => {
-      answerState.enable(poll, instanceId);
-      console.log('Answer state: enabled');
+    handler = createPollHandler(page, (poll, instanceId) => {
       console.log('Poll question:', poll.question);
-      console.log('Poll answers:', poll.answers);
-      console.log('Sending message to Discord');
-      await send_message(userConfig, poll);
-      console.log('Message was sent to Discord');
+      // Keep detection responsive while Codex and Discord are pending.
+      void answerState.start({ poll, instanceId }).catch(() => {
+        invalidate();
+        console.error('Could not prepare poll approval.');
+      });
     });
-    page.once('close', () => { answerState.disable(); handler?.stop(); });
-    page.on('domcontentloaded', () => answerState.disable());
-    stopDetection = await startDetection(page, handler, () => answerState.disable());
+    page.once('close', () => { invalidate(); handler?.stop(); });
+    page.on('domcontentloaded', invalidate);
+    stopDetection = await startDetection(page, handler, invalidate);
 
     
     await closed;
