@@ -109,15 +109,22 @@ export async function answerPoll(
         await submit.asElement()!.click({ timeout: 750 });
       } finally { await submit.dispose(); }
     }
-    const evidence = await page.evaluate(key => {
+    const deadline = Date.now() + 3000;
+    let evidence: { clicks: number; confirmed: boolean; ended: boolean };
+    do {
+      evidence = await page.evaluate(key => {
       const state = (window as any)[key];
-      if (!state) return { clicks: 0, confirmed: false };
+      if (!state) return { clicks: 0, confirmed: false, ended: true };
       // Exact explicit acknowledgement, scoped to the unchanged poll, newly appearing after action.
       const confirmed = !state.cancelled && !state.blocked && state.matches() &&
         state.clicks === (state.submit ? 2 : 1) && state.statuses().some((text: string) =>
           !state.before.includes(text) && /^(?:(?:your )?(?:answer|response|vote) (?:has been )?(?:submitted|recorded|received)(?: successfully)?)[.!]?$/i.test(text));
-      return { clicks: state.clicks, confirmed };
-    }, key);
+      return { clicks: state.clicks, confirmed,
+        ended: state.cancelled || state.blocked || !state.matches() };
+      }, key);
+      if (evidence.confirmed || evidence.ended || signal?.aborted || Date.now() >= deadline) break;
+      await new Promise(resolve => setTimeout(resolve, 50));
+    } while (true);
     if (!evidence.clicks) return failed('Interaction was blocked before a click reached the control.');
     return evidence.confirmed && !signal?.aborted
       ? { status: 'confirmed', detail: 'New explicit submission acknowledgement appeared in the poll.' }
