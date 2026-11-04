@@ -33,6 +33,9 @@ export async function answerPoll(
       const roots = Array.from(document.querySelectorAll(rootSelector)).filter(visible);
       const root = roots[0];
       if (roots.length !== 1 || !root || root.id !== identity.instanceId) throw Error('Poll instance is stale or ambiguous.');
+      const alreadyRecorded = Array.from(root.querySelectorAll('[role="status"], [aria-live="polite"], [aria-live="assertive"]'))
+        .filter(visible).some(el => /^(?:(?:your )?(?:answer|response|vote) (?:has been )?(?:submitted|recorded|received)(?: successfully)?)[.!]?$/i.test(normalize((el as HTMLElement).innerText)));
+      if (alreadyRecorded) return 'already-recorded';
       const read = () => {
         const headings = Array.from(root.querySelectorAll(headingSelector)).filter(visible);
         const boxes = Array.from(root.querySelectorAll(answersSelector)).filter(visible)
@@ -48,7 +51,12 @@ export async function answerPoll(
       };
       if (!matches()) throw Error('Poll question or ordered answers changed.');
       const { boxes } = read();
-      const controls = boxes.map(box => Array.from(box.querySelectorAll('button, input, [role="button"], [role="radio"], a[href], select, textarea')));
+      const controls = boxes.map(box => {
+        // Legacy options include both a vote button and an Undo vote button.
+        const votes = Array.from(box.querySelectorAll('button.component-response-multiple-choice__option__vote'));
+        if (votes.length) return votes;
+        return Array.from(box.querySelectorAll('button, input, [role="button"], [role="radio"], a[href], select, textarea'));
+      });
       if (controls.some(items => items.length !== 1)) throw Error('Answer controls are ambiguous or unsupported.');
       const target = controls[choice - 1]![0]!;
       const buttonMode = controls.every(items => items[0] instanceof HTMLButtonElement);
@@ -89,6 +97,7 @@ export async function answerPoll(
       (window as any)[key] = state;
       return radioMode ? 'radio' : 'button';
     }, { key, identity, choice, rootSelector, headingSelector, answersSelector });
+    if (adapter === 'already-recorded') return failed('A response is already recorded for this poll; no new answer was submitted.');
     installed = true;
     if (signal?.aborted) return failed('Aborted before interaction.');
     const target = await page.evaluateHandle(key => (window as any)[key].target, key);

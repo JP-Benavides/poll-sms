@@ -30,7 +30,7 @@ For incoming messages, install your bot in the server and give it View Channel a
 bun start
 ```
 
-Approve Duo on your phone when prompted. The visible browser remains open until you close it. After login, the watcher observes `#active_tab_content` with a 300 ms debounce. A visible `.component-response-header__title` means open; no visible question heading means closed. When open, it calls the existing multiple-choice parser. Startup and page loads also trigger checks. Delivery is attempted once per distinct poll instance, question, and ordered answer set per run; reopening an unchanged poll does not send it again.
+Login steps run only when their corresponding controls are visible; absent screens are skipped. The flow watches for delayed screens for up to 180 seconds. Approve Duo on your phone when prompted. The visible browser remains open until you close it. After login, the watcher observes `#active_tab_content` with a 300 ms debounce. A visible `.component-response-header__title` means open; no visible question heading means closed. When open, it calls the existing multiple-choice parser. Startup and page loads also trigger checks. Delivery is attempted once per distinct poll instance, question, and ordered answer set per run; reopening an unchanged poll does not send it again.
 
 Answer handling starts disabled. Each newly parsed poll starts a local Codex CLI call using your existing Codex login. Install Codex and sign in before running; if the solver is unavailable, fails, or exceeds its 60-second deadline, the app requests a manual answer instead.
 

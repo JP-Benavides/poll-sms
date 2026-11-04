@@ -30,11 +30,13 @@ test('waits for delayed acknowledgement without clicking again', async () => {
     expect(await page.evaluate(() => (window as any).clicks)).toBe(1);
   } finally { await page.close(); }
 });
-test('existing acknowledgement is not confirmation; wait is bounded', async () => {
+test('existing acknowledgement prevents another submission', async () => {
   const page = await setup('none', 'Answer submitted');
   try {
-    expect((await answerPoll(page, identity, 1)).status).toBe('uncertain');
-    expect(await page.evaluate(() => (window as any).clicks)).toBe(1);
+    const result = await answerPoll(page, identity, 1);
+    expect(result.status).toBe('failed');
+    expect(result.detail).toContain('already recorded');
+    expect(await page.evaluate(() => (window as any).clicks)).toBe(0);
   } finally { await page.close(); }
 });
 test('poll replacement ends confirmation wait', async () => {
@@ -50,5 +52,24 @@ test('abort after click ends confirmation wait', async () => {
     await page.waitForFunction(() => (window as any).clicks === 1);
     controller.abort();
     expect((await result).status).toBe('uncertain');
+  } finally { await page.close(); }
+});
+
+test('clicks the vote button while ignoring the hidden Undo button', async () => {
+  const page = await setup('success');
+  try {
+    await page.evaluate(() => {
+      const vote = document.querySelector('button')!;
+      vote.className = 'component-response-multiple-choice__option__vote';
+      const undo = document.createElement('button');
+      undo.className = 'component-response-multiple-choice__option__undo';
+      undo.hidden = true;
+      undo.title = 'Undo vote';
+      undo.onclick = () => { (window as any).undoClicked = true; };
+      vote.after(undo);
+    });
+    expect((await answerPoll(page, identity, 1)).status).toBe('confirmed');
+    expect(await page.evaluate(() => (window as any).clicks)).toBe(1);
+    expect(await page.evaluate(() => Boolean((window as any).undoClicked))).toBe(false);
   } finally { await page.close(); }
 });
